@@ -29,8 +29,4 @@ dependencies {
 
     // dexter runtime permissions
     implementation 'com.karumi:dexter:4.2.0'
-
-    // ButterKnife view binding
-    implementation 'com.jakewharton:butterknife:8.8.1'
-    annotationProcessor 'com.jakewharton:butterknife-compiler:8.8.1'
 }
