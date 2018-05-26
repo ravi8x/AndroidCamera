@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">Android Camera</string>
     <string name="action_settings">Settings</string>
+    <string name="preview_description">Image and Video preview will appear here</string>
+    <string name="btn_take_picture">Take Picture</string>
+    <string name="btn_record_video">Record Video</string>
 </resources>

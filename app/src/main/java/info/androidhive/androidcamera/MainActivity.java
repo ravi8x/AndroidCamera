@@ -14,6 +14,7 @@ import android.text.TextUtils;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.VideoView;
 
@@ -50,6 +51,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static String imageStoragePath;
 
+    private TextView txtDescription;
     private ImageView imgPreview;
     private VideoView videoPreview;
     private Button btnCapturePicture, btnRecordVideo;
@@ -71,6 +73,7 @@ public class MainActivity extends AppCompatActivity {
             finish();
         }
 
+        txtDescription = findViewById(R.id.txt_desc);
         imgPreview = findViewById(R.id.imgPreview);
         videoPreview = findViewById(R.id.videoPreview);
         btnCapturePicture = findViewById(R.id.btnCapturePicture);
@@ -279,6 +282,7 @@ public class MainActivity extends AppCompatActivity {
     private void previewCapturedImage() {
         try {
             // hide video preview
+            txtDescription.setVisibility(View.GONE);
             videoPreview.setVisibility(View.GONE);
 
             imgPreview.setVisibility(View.VISIBLE);
@@ -298,6 +302,7 @@ public class MainActivity extends AppCompatActivity {
     private void previewVideo() {
         try {
             // hide image preview
+            txtDescription.setVisibility(View.GONE);
             imgPreview.setVisibility(View.GONE);
 
             videoPreview.setVisibility(View.VISIBLE);
