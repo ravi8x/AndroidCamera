@@ -1,23 +1,16 @@
 package info.androidhive.androidcamera;
 
 import android.Manifest;
+import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
 import android.provider.MediaStore;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
-import android.support.v4.content.FileProvider;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
-import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
+import android.text.TextUtils;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -31,84 +24,115 @@ import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
     // Activity request codes
     private static final int CAMERA_CAPTURE_IMAGE_REQUEST_CODE = 100;
     private static final int CAMERA_CAPTURE_VIDEO_REQUEST_CODE = 200;
+
+    // key to store image path in savedInstance state
+    public static final String KEY_IMAGE_STORAGE_PATH = "image_path";
+
     public static final int MEDIA_TYPE_IMAGE = 1;
     public static final int MEDIA_TYPE_VIDEO = 2;
 
-    // directory name to store captured images and videos
-    private static final String IMAGE_DIRECTORY_NAME = "Hello Camera";
+    // Bitmap sampling size
+    public static final int BITMAP_SAMPLE_SIZE = 8;
 
-    private Uri fileUri; // file url to store image/video
+    // Gallery directory name to store the images or videos
+    public static final String GALLERY_DIRECTORY_NAME = "Hello Camera";
+
+    // Image and Video file extensions
+    public static final String IMAGE_EXTENSION = "jpg";
+    public static final String VIDEO_EXTENSION = "mp4";
+
+    private static String imageStoragePath;
 
     private ImageView imgPreview;
     private VideoView videoPreview;
     private Button btnCapturePicture, btnRecordVideo;
 
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
-            }
-        });
+        // Checking availability of the camera
+        if (!CameraUtils.isDeviceSupportCamera(getApplicationContext())) {
+            Toast.makeText(getApplicationContext(),
+                    "Sorry! Your device doesn't support camera",
+                    Toast.LENGTH_LONG).show();
+            // will close the app if the device doesn't have camera
+            finish();
+        }
 
-        imgPreview = (ImageView) findViewById(R.id.imgPreview);
-        videoPreview = (VideoView) findViewById(R.id.videoPreview);
-        btnCapturePicture = (Button) findViewById(R.id.btnCapturePicture);
-        btnRecordVideo = (Button) findViewById(R.id.btnRecordVideo);
+        imgPreview = findViewById(R.id.imgPreview);
+        videoPreview = findViewById(R.id.videoPreview);
+        btnCapturePicture = findViewById(R.id.btnCapturePicture);
+        btnRecordVideo = findViewById(R.id.btnRecordVideo);
 
         /**
-         * Capture image button click event
+         * Capture image on button click
          */
         btnCapturePicture.setOnClickListener(new View.OnClickListener() {
 
             @Override
             public void onClick(View v) {
-                requestCameraPermission();
+                if (CameraUtils.checkPermissions(getApplicationContext())) {
+                    captureImage();
+                } else {
+                    requestCameraPermission(MEDIA_TYPE_IMAGE);
+                }
             }
         });
 
         /**
-         * Record video button click event
+         * Record video on button click
          */
         btnRecordVideo.setOnClickListener(new View.OnClickListener() {
 
             @Override
             public void onClick(View v) {
-                // record video
-                recordVideo();
+                if (CameraUtils.checkPermissions(getApplicationContext())) {
+                    captureVideo();
+                } else {
+                    requestCameraPermission(MEDIA_TYPE_VIDEO);
+                }
             }
         });
 
-        // Checking camera availability
-        if (!isDeviceSupportCamera()) {
-            Toast.makeText(getApplicationContext(),
-                    "Sorry! Your device doesn't support camera",
-                    Toast.LENGTH_LONG).show();
-            // will close the app if the device does't have camera
-            finish();
+        // restoring storage image path from saved instance state
+        // otherwise the path will be null on device rotation
+        restoreFromBundle(savedInstanceState);
+    }
+
+    /**
+     * Restoring store image path from saved instance state
+     */
+    private void restoreFromBundle(Bundle savedInstanceState) {
+        if (savedInstanceState != null) {
+            if (savedInstanceState.containsKey(KEY_IMAGE_STORAGE_PATH)) {
+                imageStoragePath = savedInstanceState.getString(KEY_IMAGE_STORAGE_PATH);
+                if (!TextUtils.isEmpty(imageStoragePath)) {
+                    if (imageStoragePath.substring(imageStoragePath.lastIndexOf(".")).equals("." + IMAGE_EXTENSION)) {
+                        previewCapturedImage();
+                    } else if (imageStoragePath.substring(imageStoragePath.lastIndexOf(".")).equals("." + VIDEO_EXTENSION)) {
+                        previewVideo();
+                    }
+                }
+            }
         }
     }
 
-    private void requestCameraPermission() {
+    /**
+     * Requesting permissions using Dexter library
+     */
+    private void requestCameraPermission(final int type) {
         Dexter.withActivity(this)
                 .withPermissions(Manifest.permission.CAMERA,
                         Manifest.permission.WRITE_EXTERNAL_STORAGE,
@@ -117,10 +141,16 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onPermissionsChecked(MultiplePermissionsReport report) {
                         if (report.areAllPermissionsGranted()) {
-                            // capture picture
-                            captureImage();
+
+                            if (type == MEDIA_TYPE_IMAGE) {
+                                // capture picture
+                                captureImage();
+                            } else {
+                                captureVideo();
+                            }
+
                         } else if (report.isAnyPermissionPermanentlyDenied()) {
-                            openSettings();
+                            showPermissionsAlert();
                         }
                     }
 
@@ -131,31 +161,19 @@ public class MainActivity extends AppCompatActivity {
                 }).check();
     }
 
-    private void openSettings() {
-
-    }
 
     /**
-     * Checking device has camera hardware or not
-     */
-    private boolean isDeviceSupportCamera() {
-        if (getApplicationContext().getPackageManager().hasSystemFeature(
-                PackageManager.FEATURE_CAMERA)) {
-            // this device has a camera
-            return true;
-        } else {
-            // no camera on this device
-            return false;
-        }
-    }
-
-    /**
-     * Capturing Camera Image will lauch camera app requrest image capture
+     * Capturing Camera Image will launch camera app requested image capture
      */
     private void captureImage() {
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
 
-        fileUri = getOutputMediaFileUri(MEDIA_TYPE_IMAGE);
+        File file = CameraUtils.getOutputMediaFile(MEDIA_TYPE_IMAGE);
+        if (file != null) {
+            imageStoragePath = file.getAbsolutePath();
+        }
+
+        Uri fileUri = CameraUtils.getOutputMediaFileUri(getApplicationContext(), file);
 
         intent.putExtra(MediaStore.EXTRA_OUTPUT, fileUri);
 
@@ -164,52 +182,61 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Here we store the file url as it will be null after returning from camera
-     * app
+     * Saving stored image path to saved instance state
      */
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
 
-        // save file url in bundle as it will be null on scren orientation
+        // save file url in bundle as it will be null on screen orientation
         // changes
-        outState.putParcelable("file_uri", fileUri);
+        outState.putString(KEY_IMAGE_STORAGE_PATH, imageStoragePath);
     }
 
+    /**
+     * Restoring image path from saved instance state
+     */
     @Override
     protected void onRestoreInstanceState(Bundle savedInstanceState) {
         super.onRestoreInstanceState(savedInstanceState);
 
         // get the file url
-        fileUri = savedInstanceState.getParcelable("file_uri");
+        imageStoragePath = savedInstanceState.getString(KEY_IMAGE_STORAGE_PATH);
     }
 
     /**
-     * Recording video
+     * Launching camera app to record video
      */
-    private void recordVideo() {
+    private void captureVideo() {
         Intent intent = new Intent(MediaStore.ACTION_VIDEO_CAPTURE);
 
-        fileUri = getOutputMediaFileUri(MEDIA_TYPE_VIDEO);
+        File file = CameraUtils.getOutputMediaFile(MEDIA_TYPE_VIDEO);
+        if (file != null) {
+            imageStoragePath = file.getAbsolutePath();
+        }
+
+        Uri fileUri = CameraUtils.getOutputMediaFileUri(getApplicationContext(), file);
 
         // set video quality
         intent.putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1);
 
         intent.putExtra(MediaStore.EXTRA_OUTPUT, fileUri); // set the image file
-        // name
 
         // start the video capture Intent
         startActivityForResult(intent, CAMERA_CAPTURE_VIDEO_REQUEST_CODE);
     }
 
     /**
-     * Receiving activity result method will be called after closing the camera
+     * Activity result method will be called after closing the camera
      */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         // if the result is capturing Image
         if (requestCode == CAMERA_CAPTURE_IMAGE_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
+                // Refreshing the gallery
+                CameraUtils.refreshGallery(getApplicationContext(), imageStoragePath);
+
                 // successfully captured the image
                 // display it in image view
                 previewCapturedImage();
@@ -226,6 +253,9 @@ public class MainActivity extends AppCompatActivity {
             }
         } else if (requestCode == CAMERA_CAPTURE_VIDEO_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
+                // Refreshing the gallery
+                CameraUtils.refreshGallery(getApplicationContext(), imageStoragePath);
+
                 // video successfully recorded
                 // preview the recorded video
                 previewVideo();
@@ -244,7 +274,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Display image from a path to ImageView
+     * Display image from gallery
      */
     private void previewCapturedImage() {
         try {
@@ -253,44 +283,17 @@ public class MainActivity extends AppCompatActivity {
 
             imgPreview.setVisibility(View.VISIBLE);
 
-            // bimatp factory
-            BitmapFactory.Options options = new BitmapFactory.Options();
+            Bitmap bitmap = CameraUtils.optimizeBitmap(BITMAP_SAMPLE_SIZE, imageStoragePath);
 
-            // downsizing image as it throws OutOfMemory Exception for larger
-            // images
-            options.inSampleSize = 8;
-
-            final Bitmap bitmap = BitmapFactory.decodeFile(fileUri.getPath(), options);
-
-            // final Bitmap bitmap = BitmapFactory.decodeFile(FileProvider.getUriForFile(getApplicationContext(), getPackageName() + ".camera.provider", new File(fileUri.getPath())).getPath());
             imgPreview.setImageBitmap(bitmap);
-            // Bitmap bitmap = null;
-            /*try {
-                bitmap = BitmapFactory.decodeStream(getContentResolver().openInputStream(fileUri));
-                imgPreview.setImageBitmap(bitmap);
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-            }*/
-
 
         } catch (NullPointerException e) {
             e.printStackTrace();
         }
     }
 
-    // TODO - call this after taking picture
-    private void refreshGallery() {
-        // ScanFile so it will be appeared on Gallery
-        MediaScannerConnection.scanFile(MainActivity.this,
-                new String[]{fileUri.getPath()}, null,
-                new MediaScannerConnection.OnScanCompletedListener() {
-                    public void onScanCompleted(String path, Uri uri) {
-                    }
-                });
-    }
-
     /**
-     * Previewing recorded video
+     * Displaying video in VideoView
      */
     private void previewVideo() {
         try {
@@ -298,7 +301,7 @@ public class MainActivity extends AppCompatActivity {
             imgPreview.setVisibility(View.GONE);
 
             videoPreview.setVisibility(View.VISIBLE);
-            videoPreview.setVideoPath(fileUri.getPath());
+            videoPreview.setVideoPath(imageStoragePath);
             // start playing
             videoPreview.start();
         } catch (Exception e) {
@@ -307,72 +310,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * ------------ Helper Methods ----------------------
-     * */
-
-    /**
-     * Creating file uri to store image/video
+     * Alert dialog to navigate to app settings
+     * to enable necessary permissions
      */
-    public Uri getOutputMediaFileUri(int type) {
-        return FileProvider.getUriForFile(getApplicationContext(), getPackageName() + ".camera.provider", getOutputMediaFile(type));
-    }
+    private void showPermissionsAlert() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Permissions required!")
+                .setMessage("Camera needs few permissions to work properly. Grant them in settings.")
+                .setPositiveButton("GOTO SETTINGS", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
+                        CameraUtils.openSettings(MainActivity.this);
+                    }
+                })
+                .setNegativeButton("CANCEL", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
 
-    /**
-     * returning image / video
-     */
-    private static File getOutputMediaFile(int type) {
-
-        // External sdcard location
-        File mediaStorageDir = new File(
-                Environment
-                        .getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-                IMAGE_DIRECTORY_NAME);
-
-        // Create the storage directory if it does not exist
-        if (!mediaStorageDir.exists()) {
-            if (!mediaStorageDir.mkdirs()) {
-                Log.d(IMAGE_DIRECTORY_NAME, "Oops! Failed create "
-                        + IMAGE_DIRECTORY_NAME + " directory");
-                return null;
-            }
-        }
-
-        // Create a media file name
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss",
-                Locale.getDefault()).format(new Date());
-        File mediaFile;
-        if (type == MEDIA_TYPE_IMAGE) {
-            mediaFile = new File(mediaStorageDir.getPath() + File.separator
-                    + "IMG_" + timeStamp + ".jpg");
-        } else if (type == MEDIA_TYPE_VIDEO) {
-            mediaFile = new File(mediaStorageDir.getPath() + File.separator
-                    + "VID_" + timeStamp + ".mp4");
-        } else {
-            return null;
-        }
-
-        return mediaFile;
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
+                    }
+                }).show();
     }
 }
