@@ -27,6 +27,10 @@ import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
 import java.io.File;
 import java.util.List;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
+import butterknife.OnClick;
+
 public class MainActivity extends AppCompatActivity {
 
     // Activity request codes
@@ -51,16 +55,21 @@ public class MainActivity extends AppCompatActivity {
 
     private static String imageStoragePath;
 
-    private TextView txtDescription;
-    private ImageView imgPreview;
-    private VideoView videoPreview;
-    private Button btnCapturePicture, btnRecordVideo;
+    @BindView(R.id.txt_desc)
+    TextView txtDescription;
 
+    @BindView(R.id.imgPreview)
+    ImageView imgPreview;
+
+    @BindView(R.id.videoPreview)
+    VideoView videoPreview;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        ButterKnife.bind(this);
+
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
@@ -73,45 +82,27 @@ public class MainActivity extends AppCompatActivity {
             finish();
         }
 
-        txtDescription = findViewById(R.id.txt_desc);
-        imgPreview = findViewById(R.id.imgPreview);
-        videoPreview = findViewById(R.id.videoPreview);
-        btnCapturePicture = findViewById(R.id.btnCapturePicture);
-        btnRecordVideo = findViewById(R.id.btnRecordVideo);
-
-        /**
-         * Capture image on button click
-         */
-        btnCapturePicture.setOnClickListener(new View.OnClickListener() {
-
-            @Override
-            public void onClick(View v) {
-                if (CameraUtils.checkPermissions(getApplicationContext())) {
-                    captureImage();
-                } else {
-                    requestCameraPermission(MEDIA_TYPE_IMAGE);
-                }
-            }
-        });
-
-        /**
-         * Record video on button click
-         */
-        btnRecordVideo.setOnClickListener(new View.OnClickListener() {
-
-            @Override
-            public void onClick(View v) {
-                if (CameraUtils.checkPermissions(getApplicationContext())) {
-                    captureVideo();
-                } else {
-                    requestCameraPermission(MEDIA_TYPE_VIDEO);
-                }
-            }
-        });
-
         // restoring storage image path from saved instance state
         // otherwise the path will be null on device rotation
         restoreFromBundle(savedInstanceState);
+    }
+
+    @OnClick(R.id.btnCapturePicture)
+    public void captureImageClick() {
+        if (CameraUtils.checkPermissions(getApplicationContext())) {
+            captureImage();
+        } else {
+            requestCameraPermission(MEDIA_TYPE_IMAGE);
+        }
+    }
+
+    @OnClick(R.id.btnRecordVideo)
+    public void captureVideoClick() {
+        if (CameraUtils.checkPermissions(getApplicationContext())) {
+            captureVideo();
+        } else {
+            requestCameraPermission(MEDIA_TYPE_VIDEO);
+        }
     }
 
     /**
